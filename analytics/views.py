@@ -1,4 +1,4 @@
-from django.db.models import Count
+from django.db.models import Count, Avg, Q
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -51,4 +51,57 @@ class TopSkillsView(APIView):
             'selected_level': level or 'all',
             'total_vacancies': vacancies_qs.count(),
             'top_skills': top_skills
+        })
+
+class DashboardAnalyticsAPIView(APIView):
+    """
+    API эндпоинт для получения агрегированных данных для дашборда и графиков.
+    """
+    def get(self, request, *args, **kwargs):
+        top_skills_qs = (
+            Skill.objects.annotate(vacancy_count=Count('vacancies'))
+            .order_by('-vacancy_count')[:10]
+        )
+        top_skills = [
+            {"name": skill.name, "count": skill.vacancy_count}
+            for skill in top_skills_qs
+        ]
+
+        experience_levels = (
+            Vacancy.objects.values('experience_level')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+
+        salary_by_skill = []
+        for skill in top_skills_qs[:8]:
+            avg_salary = Vacancy.objects.filter(
+                skills=skill,
+                currency='RUR'
+            ).filter(
+                Q(salary_from__isnull=False) | Q(salary_to__isnull=False)
+            ).aggregate(
+                avg_from=Avg('salary_from'),
+                avg_to=Avg('salary_to')
+            )
+            
+            avg_from = avg_salary['avg_from'] or 0
+            avg_to = avg_salary['avg_to'] or 0
+            
+            if avg_from and avg_to:
+                calculated_avg = (avg_from + avg_to) / 2
+            else:
+                calculated_avg = avg_from or avg_to
+
+            if calculated_avg > 0:
+                salary_by_skill.append({
+                    "skill": skill.name,
+                    "avg_salary": round(calculated_avg)
+                })
+
+        return Response({
+            "top_skills": top_skills,
+            "experience_levels": list(experience_levels),
+            "salary_by_skill": salary_by_skill,
+            "total_vacancies": Vacancy.objects.count()
         })
