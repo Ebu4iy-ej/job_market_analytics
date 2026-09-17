@@ -2,6 +2,7 @@ from django.db.models import Count, Avg, Q
 from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.shortcuts import render
 
 from .models import DailyAnalytics, Skill, UserProfile, Vacancy
 from .serializers import (
@@ -105,3 +106,6 @@ class DashboardAnalyticsAPIView(APIView):
             "salary_by_skill": salary_by_skill,
             "total_vacancies": Vacancy.objects.count()
         })
+def dashboard_page_view(request):
+    #отображает html страницу дашборда с графиками Chart.js.
+    return render(request, "analytics/dashboard.html")

@@ -25,6 +25,7 @@ from analytics.views import (
     UserProfileViewSet,
     VacancyViewSet,
     DashboardAnalyticsAPIView,
+    dashboard_page_view,
 )
 
 router = DefaultRouter()
@@ -38,4 +39,5 @@ urlpatterns = [
     path('api/top-skills/', TopSkillsView.as_view(), name='top-skills'),
     path('api/', include(router.urls)),
     path('api/dashboard-data/', DashboardAnalyticsAPIView.as_view(), name='api-dashboard-data'),
+    path('dashboard/', dashboard_page_view, name='dashboard-page')
 ]
