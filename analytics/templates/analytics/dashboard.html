@@ -4,120 +4,134 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Аналитический Дашборд Вакансий</title>
-
-    <!-- 1. Подключаем CSS Bootstrap 5 для быстрого и аккуратного верстания колонок и карточек -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
-    <!-- 2. Подключаем библиотеку Chart.js через CDN (она отвечает за отрисовку графиков на HTML5 Canvas) -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-light">
 
-    <!-- Контейнер с отступами по краям -->
     <div class="container my-5">
         <h1 class="mb-4 text-center">Аналитика рынка IT-вакансий</h1>
 
-        <!-- Сетка Bootstrap: 2 карточки в один ряд на средних и больших экранах -->
+        <!-- БЛОК ФИЛЬТРОВ -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <div class="row g-3">
+                    <!-- Поиск по названию вакансии -->
+                    <div class="col-md-6">
+                        <label for="searchInput" class="form-label font-weight-bold">Поиск по должности:</label>
+                        <input type="text" id="searchInput" class="form-control" placeholder="Например: Python, Backend...">
+                    </div>
+
+                    <!-- Фильтр по опыту работы -->
+                    <div class="col-md-6">
+                        <label for="experienceSelect" class="form-label font-weight-bold">Опыт работы:</label>
+                        <select id="experienceSelect" class="form-select">
+                            <option value="">Все уровни</option>
+                            <option value="junior">Junior (без опыта / до 1 года)</option>
+                            <option value="middle">Middle (1-3 года)</option>
+                            <option value="senior">Senior (3+ лет)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ГРАФИКИ -->
         <div class="row g-4">
-            
-            <!-- Карточка 1: График навыков -->
             <div class="col-md-7">
                 <div class="card shadow-sm">
                     <div class="card-body">
                         <h5 class="card-title">Топ востребованных навыков</h5>
-                        <!-- HTML5 Canvas — холст, на котором Chart.js рисует диаграмму -->
                         <canvas id="skillsChart"></canvas>
                     </div>
                 </div>
             </div>
 
-            <!-- Карточка 2: График уровня опыта -->
             <div class="col-md-5">
                 <div class="card shadow-sm">
                     <div class="card-body">
                         <h5 class="card-title">Опыт работы</h5>
-                        <!-- Второй холст Canvas для круговой диаграммы -->
                         <canvas id="experienceChart"></canvas>
                     </div>
                 </div>
             </div>
-
         </div>
     </div>
 
-    <!-- 3. Наш JavaScript-код для получения данных и инициализации диаграмм -->
     <script>
-        // Функция async позволяет использовать оператор await для асинхронных сетевых запросов
+        // Глобальные переменные для хранения экземпляров Chart.js
+        // (нужны, чтобы уничтожать старый график перед рисованием нового)
+        let skillsChartInstance = null;
+        let experienceChartInstance = null;
+
         async function loadDashboardData() {
+            // 1. Получаем значения из полей ввода
+            const searchVal = document.getElementById('searchInput').value;
+            const expVal = document.getElementById('experienceSelect').value;
+
+            // 2. Формируем URL с параметрами фильтрации
+            const url = new URL('/api/dashboard-data/', window.location.origin);
+            if (searchVal) url.searchParams.append('search', searchVal);
+            if (expVal) url.searchParams.append('experience', expVal);
+
             try {
-                // fetch() отправляет HTTP GET-запрос к нашему Django REST API эндпоинту
-                const response = await fetch('/api/dashboard-data/');
-                
-                // .json() преобразует полученный ответ из формата JSON в обычный JavaScript-объект
+                // 3. Отправляем фильтрованный запрос
+                const response = await fetch(url);
                 const data = await response.json();
 
-                // Вызываем функции построения графиков, передавая им подготовленные данные
+                // 4. Перерисовываем графики
                 renderSkillsChart(data.top_skills);
                 renderExperienceChart(data.experience_levels);
 
             } catch (error) {
-                // Если произошла ошибка сети или запроса, выводим её в консоль браузера
-                console.error("Ошибка при загрузке данных для дашборда:", error);
+                console.error("Ошибка при загрузке данных:", error);
             }
         }
 
-        // Функция построения столбчатой диаграммы навыков
         function renderSkillsChart(topSkills) {
-            // .map() вытаскивает из массива объектов только названия навыков: ['Python', 'SQL', ...]
             const labels = topSkills.map(item => item.name);
-            
-            // .map() вытаскивает количество упоминаний: [92, 61, ...]
             const counts = topSkills.map(item => item.count);
-
-            // Находим холст <canvas id="skillsChart"> в DOM-дереве
             const ctx = document.getElementById('skillsChart').getContext('2d');
 
-            // Создаем экземпляр графика Chart
-            new Chart(ctx, {
-                type: 'bar', // Тип графика: 'bar' (столбчатая диаграмма)
+            // Если график уже существует — уничтожаем его перед перезаписью
+            if (skillsChartInstance) {
+                skillsChartInstance.destroy();
+            }
+
+            skillsChartInstance = new Chart(ctx, {
+                type: 'bar',
                 data: {
-                    labels: labels, // Подписи по оси X (названия навыков)
+                    labels: labels,
                     datasets: [{
                         label: 'Количество вакансий',
-                        data: counts, // Значения по оси Y (количества)
-                        backgroundColor: 'rgba(54, 162, 235, 0.6)', // Цвет закраски столбцов (голубой)
-                        borderColor: 'rgba(54, 162, 235, 1)',     // Цвет рамки столбцов
-                        borderWidth: 1                             // Толщина рамки
+                        data: counts,
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
                     }]
                 },
                 options: {
-                    responsive: true, // График автоматически подстраивается под размер экрана
-                    scales: {
-                        y: {
-                            beginAtZero: true // Ось Y обязательно начинается с 0
-                        }
-                    }
+                    responsive: true,
+                    scales: { y: { beginAtZero: true } }
                 }
             });
         }
 
-        // Функция построения круговой диаграммы (уровни опыта)
         function renderExperienceChart(experienceData) {
-            // Формируем подписи (уровни опыта)
             const labels = experienceData.map(item => item.experience_level || 'Не указан');
-            
-            // Формируем значения (количество вакансий)
             const counts = experienceData.map(item => item.count);
-
             const ctx = document.getElementById('experienceChart').getContext('2d');
 
-            new Chart(ctx, {
-                type: 'doughnut', // Тип графика: 'doughnut' (пончик / кольцевая диаграмма)
+            if (experienceChartInstance) {
+                experienceChartInstance.destroy();
+            }
+
+            experienceChartInstance = new Chart(ctx, {
+                type: 'doughnut',
                 data: {
                     labels: labels,
                     datasets: [{
                         data: counts,
-                        // Массив цветов для каждого сектора круга
                         backgroundColor: [
                             'rgba(255, 99, 132, 0.7)',
                             'rgba(75, 192, 192, 0.7)',
@@ -126,13 +140,23 @@
                         ]
                     }]
                 },
-                options: {
-                    responsive: true
-                }
+                options: { responsive: true }
             });
         }
 
-        // Запускаем функцию загрузки сразу после открытия страницы
+        // ВЕШАЕМ СОБЫТИЯ НА ЭЛЕМЕНТЫ ФИЛЬТРОВ
+
+        // При выборе опыта в <select> сразу перезагружаем данные
+        document.getElementById('experienceSelect').addEventListener('change', loadDashboardData);
+
+        // При вводе текста в текстовое поле с задержкой 300мс (debounce), чтобы не делать запрос на каждую букву
+        let timeout = null;
+        document.getElementById('searchInput').addEventListener('input', () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(loadDashboardData, 300);
+        });
+
+        // Первая загрузка при открытии страницы
         loadDashboardData();
     </script>
 </body>

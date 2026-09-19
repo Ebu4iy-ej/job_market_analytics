@@ -56,56 +56,49 @@ class TopSkillsView(APIView):
 
 class DashboardAnalyticsAPIView(APIView):
     """
-    API эндпоинт для получения агрегированных данных для дашборда и графиков.
+    API эндпоинт для получения агрегированных данных с поддержкой фильтрации.
     """
     def get(self, request, *args, **kwargs):
+        # 1. Получаем параметры фильтрации из URL (исправлено имя переменной)
+        experience_filter = request.GET.get('experience', None)
+        search_query = request.GET.get('search', None)
+
+        # 2. Базовый QuerySet вакансий
+        vacancies = Vacancy.objects.all()
+
+        # 3. Применяем фильтры
+        if experience_filter:
+            vacancies = vacancies.filter(experience_level__icontains=experience_filter)
+        
+        if search_query:
+            vacancies = vacancies.filter(title__icontains=search_query)
+
+        # 4. Агрегируем топ-навыки по отфильтрованным вакансиям
         top_skills_qs = (
-            Skill.objects.annotate(vacancy_count=Count('vacancies'))
+            Skill.objects.filter(vacancies__in=vacancies)
+            .annotate(vacancy_count=Count('vacancies'))
             .order_by('-vacancy_count')[:10]
         )
+        
+        # Исправлено: skill.vacancy_count (в единственном числе)
         top_skills = [
             {"name": skill.name, "count": skill.vacancy_count}
             for skill in top_skills_qs
         ]
 
+        # 5. Группировка по опыту
         experience_levels = (
-            Vacancy.objects.values('experience_level')
+            vacancies.values('experience_level')
             .annotate(count=Count('id'))
             .order_by('-count')
         )
 
-        salary_by_skill = []
-        for skill in top_skills_qs[:8]:
-            avg_salary = Vacancy.objects.filter(
-                skills=skill,
-                currency='RUR'
-            ).filter(
-                Q(salary_from__isnull=False) | Q(salary_to__isnull=False)
-            ).aggregate(
-                avg_from=Avg('salary_from'),
-                avg_to=Avg('salary_to')
-            )
-            
-            avg_from = avg_salary['avg_from'] or 0
-            avg_to = avg_salary['avg_to'] or 0
-            
-            if avg_from and avg_to:
-                calculated_avg = (avg_from + avg_to) / 2
-            else:
-                calculated_avg = avg_from or avg_to
-
-            if calculated_avg > 0:
-                salary_by_skill.append({
-                    "skill": skill.name,
-                    "avg_salary": round(calculated_avg)
-                })
-
         return Response({
             "top_skills": top_skills,
             "experience_levels": list(experience_levels),
-            "salary_by_skill": salary_by_skill,
-            "total_vacancies": Vacancy.objects.count()
+            "total_vacancies": vacancies.count()
         })
+    
 def dashboard_page_view(request):
     #отображает html страницу дашборда с графиками Chart.js.
     return render(request, "analytics/dashboard.html")
