@@ -23,6 +23,7 @@
 
 ## Структура проекта
 
+```text
 job_market_analytics/
 ├── analytics/
 │   ├── templates/analytics/
@@ -34,30 +35,44 @@ job_market_analytics/
 ├── config/                   # Настройки Django, Celery и DRF
 ├── scraper/                  # Модуль парсинга данных с HH.ru
 └── manage.py
+```
 
 ## Установка и запуск
 
-1. Клонируйте репозиторий:
-git clone https://github.com/your-username/job_market_analytics.git
-cd job_market_analytics
+1. **Клонируйте репозиторий:**
+   ```bash
+   git clone [https://github.com/your-username/job_market_analytics.git](https://github.com/your-username/job_market_analytics.git)
+   cd job_market_analytics
+   ```
 
-2. Создайте и активируйте виртуальное окружение:
-python -m venv venv
+2. **Создайте и активируйте виртуальное окружение:**
+   ```bash
+   python -m venv venv
+   ```
+   
+   * Для Windows:
+     ```bash
+     venv\Scripts\activate
+     ```
+   * Для Linux/macOS:
+     ```bash
+     source venv/bin/activate
+     ```
 
-Для Windows:
-venv\Scripts\activate
+3. **Установите зависимости:**
+   ```bash
+   pip install -r requirements.txt
+   playwright install chromium
+   ```
 
-Для Linux/macOS:
-source venv/bin/activate
+4. **Примените миграции:**
+   ```bash
+   python manage.py migrate
+   ```
 
-3. Установите зависимости:
-pip install -r requirements.txt
-playwright install chromium
+5. **Запустите сервер разработки:**
+   ```bash
+   python manage.py runserver
+   ```
 
-4. Примените миграции:
-python manage.py migrate
-
-5. Запустите сервер разработки:
-python manage.py runserver
-
-6. Откройте в браузере: http://127.0.0.1:8000/dashboard/
+6. **Откройте в браузере:** `http://127.0.0.1:8000/dashboard/`
