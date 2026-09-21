@@ -36,6 +36,32 @@
             </div>
         </div>
 
+<!-- КАРТОЧКИ МЕТРИК -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="card shadow-sm border-0 bg-primary text-white">
+                    <div class="card-body d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title text-white-50 mb-1">Всего вакансий</h6>
+                            <h2 class="mb-0 fw-bold" id="totalVacanciesCount">0</h2>
+                        </div>
+                        <div class="fs-1 text-white-50">📊</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card shadow-sm border-0 bg-success text-white">
+                    <div class="card-body d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title text-white-50 mb-1">Средняя зарплата</h6>
+                            <h2 class="mb-0 fw-bold" id="avgSalaryMetric">Не указана</h2>
+                        </div>
+                        <div class="fs-1 text-white-50">💰</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- ГРАФИКИ -->
         <div class="row g-4">
             <div class="col-md-7">
@@ -54,6 +80,42 @@
                         <canvas id="experienceChart"></canvas>
                     </div>
                 </div>
+            </div>
+        </div>
+        <!-- ТАБЛИЦА ВАКАНСИЙ И ПАГИНАЦИЯ -->
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Список вакансий</h5>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Название должности</th>
+                                <th>Компания</th>
+                                <th>Опыт</th>
+                                <th>Зарплата</th>
+                                <th>Ссылка</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vacanciesTableBody">
+                            <!-- Сюда JS будет подставлять строки с вакансиями -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Блок кнопок пагинации -->
+                <nav class="d-flex justify-content-between align-items-center mt-3">
+                    <span id="pageInfo" class="text-muted small">Страница 1 из 1</span>
+                    <ul class="pagination mb-0">
+                        <li class="page-item" id="prevPageBtn">
+                            <button class="page-link" onclick="changePage(-1)">Назад</button>
+                        </li>
+                        <li class="page-item" id="nextPageBtn">
+                            <button class="page-link" onclick="changePage(1)">Вперед</button>
+                        </li>
+                    </ul>
+                </nav>
             </div>
         </div>
     </div>
@@ -158,6 +220,140 @@
 
         // Первая загрузка при открытии страницы
         loadDashboardData();
+
+        // Глобальные переменные для управления текущей страницей
+        let currentPage = 1;
+        let totalPages = 1;
+
+        // Основная функция загрузки дашборда (теперь запускает и загрузку вакансий)
+        async function loadDashboardData() {
+            // При смене фильтра сбрасываем страницу на первую
+            currentPage = 1;
+            
+            // Параллельно обновляем и графики, и список вакансий
+            await Promise.all([
+                loadChartsData(),
+                loadVacanciesData()
+            ]);
+        }
+
+        // Загрузка данных для графиков
+        // Загрузка данных для графиков и карточек метрик
+        async function loadChartsData() {
+            const searchVal = document.getElementById('searchInput').value;
+            const expVal = document.getElementById('experienceSelect').value;
+
+            const url = new URL('/api/dashboard-data/', window.location.origin);
+            if (searchVal) url.searchParams.append('search', searchVal);
+            if (expVal) url.searchParams.append('experience', expVal);
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                // Обновляем метрики
+                document.getElementById('totalVacanciesCount').innerText = data.total_vacancies || 0;
+                
+                if (data.avg_salary) {
+                    document.getElementById('avgSalaryMetric').innerText = `${data.avg_salary.toLocaleString('ru-RU')} руб.`;
+                } else {
+                    document.getElementById('avgSalaryMetric').innerText = 'Не указана';
+                }
+
+                // Перерисовываем графики
+                renderSkillsChart(data.top_skills);
+                renderExperienceChart(data.experience_levels);
+            } catch (error) {
+                console.error("Ошибка при загрузке аналитики:", error);
+            }
+        }
+
+        // Загрузка вакансий с пагинацией
+        async function loadVacanciesData() {
+            const searchVal = document.getElementById('searchInput').value;
+            const expVal = document.getElementById('experienceSelect').value;
+
+            // Формируем URL к роутеру вакансий
+            const url = new URL('/api/vacancies/', window.location.origin);
+            url.searchParams.append('page', currentPage);
+            if (searchVal) url.searchParams.append('search', searchVal);
+            if (expVal) url.searchParams.append('experience', expVal);
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+
+                // Расчитываем общее количество страниц (data.count — общее число записей, 10 — PAGE_SIZE)
+                totalPages = Math.ceil(data.count / 10) || 1;
+
+                renderVacanciesTable(data.results);
+                updatePaginationControls();
+            } catch (error) {
+                console.error("Ошибка при загрузке вакансий:", error);
+            }
+        }
+
+        // Отрисовка строк таблицы
+        function renderVacanciesTable(vacancies) {
+            const tbody = document.getElementById('vacanciesTableBody');
+            tbody.innerHTML = ''; // Очищаем старые строки
+
+            if (vacancies.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Вакансий не найдено</td></tr>';
+                return;
+            }
+
+            vacancies.forEach(vac => {
+                // Формируем вилку зарплаты для отображения
+                let salaryText = 'Не указана';
+                if (vac.salary_from || vac.salary_to) {
+                    const fromStr = vac.salary_from ? `от ${vac.salary_from}` : '';
+                    const toStr = vac.salary_to ? `до ${vac.salary_to}` : '';
+                    const currStr = vac.currency || 'руб.';
+                    salaryText = `${fromStr} ${toStr} ${currStr}`.trim();
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="fw-bold">${vac.title}</td>
+                    <td>${vac.company_name || 'Не указана'}</td>
+                    <td><span class="badge bg-secondary">${vac.experience_level || 'Не указан'}</span></td>
+                    <td>${salaryText}</td>
+                    <td><a href="${vac.url || '#'}" target="_blank" class="btn btn-sm btn-outline-primary">Открыть</a></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Обновление состояния кнопок пагинации
+        function updatePaginationControls() {
+            document.getElementById('pageInfo').innerText = `Страница ${currentPage} из ${totalPages}`;
+            
+            // Включаем/отключаем кнопки "Назад" и "Вперед"
+            const prevBtn = document.getElementById('prevPageBtn');
+            const nextBtn = document.getElementById('nextPageBtn');
+
+            if (currentPage <= 1) {
+                prevBtn.classList.add('disabled');
+            } else {
+                prevBtn.classList.remove('disabled');
+            }
+
+            if (currentPage >= totalPages) {
+                nextBtn.classList.add('disabled');
+            } else {
+                nextBtn.classList.remove('disabled');
+            }
+        }
+
+        // Переключение страницы по клику на Назад/Вперед
+        function changePage(direction) {
+            const newPage = currentPage + direction;
+            if (newPage >= 1 && newPage <= totalPages) {
+                currentPage = newPage;
+                loadVacanciesData();
+            }
+        }
     </script>
 </body>
 </html>

@@ -33,6 +33,7 @@ router.register(r'skills', SkillViewSet)
 router.register(r'vacancies', VacancyViewSet)
 router.register(r'analytics', DailyAnalyticsViewSet)
 router.register(r'profiles', UserProfileViewSet)
+router.register(r'vacanccies', VacancyViewSet, basename='vacancies') 
 
 urlpatterns = [
     path('admin/', admin.site.urls),

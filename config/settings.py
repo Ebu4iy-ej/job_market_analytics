@@ -143,3 +143,10 @@ CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 INSTALLED_APPS += [
     'django_celery_beat',
 ]
+
+REST_FRAMEWORK = {
+    # Включаем стандартную пагинацию по номерам страниц (?page=1, ?page=2)
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    # Количество объектов (вакансий) на одной странице
+    'PAGE_SIZE': 10,
+}

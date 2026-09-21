@@ -19,8 +19,27 @@ class SkillViewSet(viewsets.ModelViewSet):
 
 
 class VacancyViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Vacancy.objects.all()
+    """
+    API эндпоинт для получения списка вакансий с пагинацией и фильтрацией.
+    """
+    queryset = Vacancy.objects.all()  # <--- ДОБАВЬ ЭТУ СТРОКУ
     serializer_class = VacancySerializer
+
+    def get_queryset(self):
+        # Берем базовый queryset и сортируем
+        queryset = super().get_queryset().order_by('-published_at', '-id')
+
+        # Получаем параметры фильтрации из URL
+        search_query = self.request.query_params.get('search', None)
+        experience_filter = self.request.query_params.get('experience', None)
+
+        if search_query:
+            queryset = queryset.filter(title__icontains=search_query)
+
+        if experience_filter:
+            queryset = queryset.filter(experience_level__icontains=experience_filter)
+
+        return queryset
 
 
 class DailyAnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
@@ -59,7 +78,7 @@ class DashboardAnalyticsAPIView(APIView):
     API эндпоинт для получения агрегированных данных с поддержкой фильтрации.
     """
     def get(self, request, *args, **kwargs):
-        # 1. Получаем параметры фильтрации из URL (исправлено имя переменной)
+        # 1. Получаем параметры фильтрации из URL
         experience_filter = request.GET.get('experience', None)
         search_query = request.GET.get('search', None)
 
@@ -80,7 +99,6 @@ class DashboardAnalyticsAPIView(APIView):
             .order_by('-vacancy_count')[:10]
         )
         
-        # Исправлено: skill.vacancy_count (в единственном числе)
         top_skills = [
             {"name": skill.name, "count": skill.vacancy_count}
             for skill in top_skills_qs
@@ -93,10 +111,27 @@ class DashboardAnalyticsAPIView(APIView):
             .order_by('-count')
         )
 
+        # 6. Расчет средней зарплаты
+        # Берем только вакансии, где указана хотя бы одна из границ зарплаты
+        vacancies_with_salary = vacancies.filter(Q(salary_from__isnull=False) | Q(salary_to__isnull=False))
+        
+        salaries = []
+        for v in vacancies_with_salary:
+            if v.salary_from and v.salary_to:
+                salaries.append((v.salary_from + v.salary_to) / 2)
+            elif v.salary_from:
+                salaries.append(v.salary_from)
+            elif v.salary_to:
+                salaries.append(v.salary_to)
+
+        avg_salary = int(sum(salaries) / len(salaries)) if salaries else None
+
         return Response({
             "top_skills": top_skills,
             "experience_levels": list(experience_levels),
-            "total_vacancies": vacancies.count()
+            "total_vacancies": vacancies.count(),
+            "avg_salary": avg_salary,
+            "vacancies_with_salary_count": len(salaries)
         })
     
 def dashboard_page_view(request):
